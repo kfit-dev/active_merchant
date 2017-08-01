@@ -41,13 +41,6 @@ module ActiveMerchant #:nodoc:
         super
       end
 
-      def purchase(money, payment, options={})
-        MultiResponse.run do |r|
-          r.process{authorize(money, payment, options)}
-          r.process{capture(money, r.authorization, options)}
-        end
-      end
-
       def authorize(money, payment, options={})
         requires!(options, :order_id)
         post = init_post(options)
@@ -63,6 +56,13 @@ module ActiveMerchant #:nodoc:
         add_invoice_for_modification(post, money, authorization, options)
         add_references(post, authorization, options)
         commit('capture', post)
+      end
+
+      def purchase(money, payment, options={})
+        MultiResponse.run do |r|
+          r.process{authorize(money, payment, options)}
+          r.process{capture(money, r.authorization, options)}
+        end
       end
 
       def refund(money, authorization, options={})
