@@ -41,14 +41,20 @@ module ActiveMerchant #:nodoc:
         super
       end
 
-      def authorize(money, payment, options={})
-        requires!(options, :order_id)
+      # Use this to attempt to authorize both non-3ds and 3ds cards
+      # Non-3ds success response message: 'Authorise'
+      def authorize(money, nonce, options={})
+        requires!(options, :reference)
         post = init_post(options)
         add_invoice(post, money, options)
-        add_payment(post, payment)
+        add_payment(post, nonce)
         add_extra_data(post, options)
         add_address(post, options)
+        puts post
         commit('authorise', post)
+      end
+
+      def authorize_3ds(money, nonce, options={})
       end
 
       def capture(money, authorization, options={})
@@ -127,7 +133,7 @@ module ActiveMerchant #:nodoc:
           value: amount(money),
           currency: options[:currency] || currency(money)
         }
-        post[:reference] = options[:order_id]
+        post[:reference] = options[:reference]
         post[:amount] = amount
       end
 
@@ -139,22 +145,14 @@ module ActiveMerchant #:nodoc:
         post[:modificationAmount] = amount
       end
 
-      def add_payment(post, payment)
-        card = {
-          expiryMonth: payment.month,
-          expiryYear: payment.year,
-          holderName: payment.name,
-          number: payment.number,
-          cvc: payment.verification_value
-        }
-        card.delete_if{|k,v| v.blank? }
-        requires!(card, :expiryMonth, :expiryYear, :holderName, :number, :cvc)
-        post[:card] = card
+      def add_payment(post, nonce)
+        # Only support nonce for Fave
+        post[:additionalData] = { "card.encrypted.json": nonce }
       end
 
       def add_references(post, authorization, options = {})
         post[:originalReference] = authorization
-        post[:reference] = options[:order_id]
+        post[:reference] = options[:reference]
       end
 
       def parse(body)
