@@ -1,4 +1,5 @@
 require 'test_helper'
+require 'adyen_cse'
 
 class RemoteAdyenTest < Test::Unit::TestCase
   def setup
@@ -6,19 +7,29 @@ class RemoteAdyenTest < Test::Unit::TestCase
 
     @amount = 100
 
-    @credit_card = credit_card('4111111111111111',
-      :month => 8,
-      :year => 2018,
-      :first_name => 'John',
-      :last_name => 'Smith',
-      :verification_value => '737',
-      :brand => 'visa'
-    )
+    # WARNING: Remove your own public key before committing!
+    public_key = ''
 
-    @declined_card = credit_card('4000300011112220')
+    @valid_nonce =
+      AdyenCse::Encrypter.new(public_key) do |card|
+        card.holder_name  = "Adyen Shopper"
+        card.number       = "4111111111111111"
+        card.expiry_month = "10"
+        card.expiry_year  = "2020"
+        card.cvc          = "737"
+      end.encrypt!
+
+    @invalid_nonce =
+      AdyenCse::Encrypter.new(public_key) do |card|
+        card.holder_name  = "Adyen Shopper"
+        card.number       = "1234123412341234"
+        card.expiry_month = "05"
+        card.expiry_year  = "2030"
+        card.cvc          = "123"
+      end.encrypt!
 
     @options = {
-      reference: '345123',
+      reference: '123789',
       shopper_email: "john.smith@test.com",
       shopper_ip: "77.110.174.153",
       shopper_reference: "John Smith",
@@ -27,15 +38,16 @@ class RemoteAdyenTest < Test::Unit::TestCase
   end
 
   def test_successful_authorize
-    response = @gateway.authorize(@amount, @credit_card, @options)
+    response = @gateway.authorize(@amount, @valid_nonce, @options)
     assert_success response
     assert_equal 'Authorised', response.message
   end
 
   def test_failed_authorize
-    response = @gateway.authorize(@amount, @declined_card, @options)
+    response = @gateway.authorize(@amount, @invalid_nonce, @options)
+    puts response.inspect
     assert_failure response
-    assert_equal 'Refused', response.message
+    assert_equal 'Invalid card number', response.message
   end
 
   def test_successful_purchase
